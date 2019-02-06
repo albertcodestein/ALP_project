@@ -30,20 +30,37 @@ keepdata <- d[keeps]
 
 attach(keepdata)
 
+#converting variables to numeric
 
-keepdata$transactionRevenue[is.na(keepdata$transactionRevenue)]<-0
-keepdata$transactionRevenue<-as.numeric(keepdata$transactionRevenue)
-keepdata$transaction<-ifelse(keepdata$transactionRevenue>0,1,0)
+keepdata <- keepdata %>% mutate_at(vars(hits, pageviews, bounces, fullVisitorId, visitNumber, visitStartTime,
+                                        transactionRevenue), function(x) as.numeric(x))
 
-keepdata$hits <- as.numeric(keepdata$hits)
-keepdata$pageviews <- as.numeric(keepdata$pageviews)
-keepdata$bounces <- as.numeric(keepdata$bounces)
-keepdata$visitNumber <- as.numeric(keepdata$visitNumber)
+#converting transaction revenue
 
+keepdata <- keepdata %>% mutate(transactionRevenue = ifelse(is.na(transactionRevenue),0,transactionRevenue/10^6))
 
-keepdata$transactionRevenue1 <- keepdata$transactionRevenue+1
-keepdata$transactionRevenue1 <- keepdata$transactionRevenue/1000000
-keepdata$logRevenue<- as.double(log(keepdata$transactionRevenue1))
+#creating log revenue
+
+keepdata <- keepdata %>% mutate(LogRevenue = log(transactionRevenue + 1))
+
+#creating IStransaction variable
+
+keepdata <- keepdata %>% mutate(IStransaction = ifelse(transactionRevenue == 0,0,1))
+
+#variable for transaction count
+
+temp <- keepdata %>% select(c("fullVisitorId", "visitNumber", "IStransaction")) %>% 
+        arrange(fullVisitorId, visitNumber)
+
+count <- 0
+for(index in 1:nrow(temp)){
+        temp$trncount[index] <- count
+        if(index + 1 > nrow(temp)) break()
+        if(temp$fullVisitorId[index] == temp$fullVisitorId[index+1] && temp$is.transaction[index] == 1) count <- count + 1
+        if(temp$fullVisitorId[index] != temp$fullVisitorId[index+1]) count <- 0
+}
+
+keepdata <- cbind(keepdata, temp)
 
 
 write.csv(keepdata, "New_raw_data.csv")
