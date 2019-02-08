@@ -60,7 +60,6 @@ for(index in 1:nrow(temp)){
         if(temp$fullVisitorId[index] != temp$fullVisitorId[index+1]) count <- 0
 }
 
-keepdata <- merge(temp[,c("fullVisitorId", "trncount")], keepdata)
-as.li
+keepdata <- keepdata %>% arrange(fullVisitorId, visitNumber) %>% mutate(trncount = temp$trncount)
 
 write.csv(keepdata, "New_raw_data.csv")
