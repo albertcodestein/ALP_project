@@ -56,11 +56,11 @@ count <- 0
 for(index in 1:nrow(temp)){
         temp$trncount[index] <- count
         if(index + 1 > nrow(temp)) break()
-        if(temp$fullVisitorId[index] == temp$fullVisitorId[index+1] && temp$is.transaction[index] == 1) count <- count + 1
+        if(temp$fullVisitorId[index] == temp$fullVisitorId[index+1] && temp$IStransaction[index] == 1) count <- count + 1
         if(temp$fullVisitorId[index] != temp$fullVisitorId[index+1]) count <- 0
 }
 
-keepdata <- cbind(keepdata, temp)
-
+keepdata <- merge(temp[,c("fullVisitorId", "trncount")], keepdata)
+as.li
 
 write.csv(keepdata, "New_raw_data.csv")
