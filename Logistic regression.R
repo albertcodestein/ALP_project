@@ -75,7 +75,7 @@ logistic <- logistic %>% mutate(trncount_sqr = (trncount)^2, pageviews_sqr = (pa
 temp <- logistic %>% filter(bounces == 0, medium != "(not set)", !is.na(pageviews) == T)
 
 regcoef <- glm(is.transaction ~ trncount + pageviews + as.factor(newVisits) + as.factor(deviceCategory) + as.factor(medium) +
-                       as.factor(is.USA) + as.factor(isTrueDirect) + as.factor(month) + trncount_sqr + pageviews_sqr, 
+                       as.factor(is.USA) + as.factor(isTrueDirect) + as.factor(month) + trncount_sqr + pageviews_sqr 
                data = temp, family = binomial(link = "logit"))
 
 summary(regcoef)
@@ -83,4 +83,48 @@ summary(regcoef)
 pred.logit <- predict.glm(regcoef, newdata = temp, type = "response")
 
 table(temp$is.transaction, pred.logit > 0.035)
+
+
+#-----------------------------------------------------------------------------------------------------------------------------#
+#Adding peak  hour and month variables to the regression
+logistic$time <- as.POSIXct(logistic$visitStartTime,origin = "1970-01-01")
+logistic$timeCST <- with_tz(logistic$time,"America/Chicago")
+logistic$hour <- hour(logistic$timeCST)
+logistic$peakhour <- if_else(logistic$hour > 7 & logistic$hour < 21, 1, 0)
+table(logistic$peak)
+
+
+
+logistic %>% group_by(month) %>% summarise(sum(is.transaction)) %>% arrange(desc(`sum(is.transaction)`))
+
+
+
+temp1 <- logistic %>% filter(bounces == 0, medium != "(not set)", !is.na(pageviews) == T)
+regcoef1 <- glm(is.transaction ~ trncount + pageviews + as.factor(newVisits) + as.factor(deviceCategory) + as.factor(medium) +
+                       as.factor(is.USA) + as.factor(isTrueDirect) + as.factor(month) + trncount_sqr + pageviews_sqr + as.factor(peakhour),
+               data = temp1, family = binomial(link = "logit"))
+
+summary(regcoef1)
+
+pred.logit1 <- predict.glm(regcoef1, newdata = temp1, type = "response")
+
+table(temp1$is.transaction, pred.logit1 > 0.035)
+
+#adding month - p value is more than 0.05 but accuracy increases significantly. 
+logistic$peakmonth <- as.numeric((if_else(logistic$month %in% c("May", "August", "December"), 1, 0)))
+
+
+temp2 <- logistic %>% filter(bounces == 0, medium != "(not set)", !is.na(pageviews) == T)
+regcoef2 <- glm(is.transaction ~ trncount + pageviews + as.factor(newVisits) + as.factor(deviceCategory) + 
+                        as.factor(medium) +as.factor(is.USA) + as.factor(isTrueDirect) + 
+                        trncount_sqr + pageviews_sqr + as.factor(peakhour) + as.factor(peakmonth),
+                data = temp2, family = binomial(link = "logit"))
+
+summary(regcoef2)
+
+pred.logit2 <- predict.glm(regcoef2, newdata = temp2, type = "response")
+
+table(temp2$is.transaction, pred.logit2 > 0.035)
+
+#-----------------------------------------------------------------------------------------------------------------------------#
 
