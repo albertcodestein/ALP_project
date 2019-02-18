@@ -100,8 +100,9 @@ logistic %>% group_by(month) %>% summarise(sum(is.transaction)) %>% arrange(desc
 
 
 temp1 <- logistic %>% filter(bounces == 0, medium != "(not set)", !is.na(pageviews) == T)
-regcoef1 <- glm(is.transaction ~ trncount + pageviews + as.factor(newVisits) + as.factor(deviceCategory) + as.factor(medium) +
-                       as.factor(is.USA) + as.factor(isTrueDirect) + as.factor(month) + trncount_sqr + pageviews_sqr + as.factor(peakhour),
+regcoef1 <- glm(is.transaction ~ trncount + pageviews + as.factor(newVisits) + as.factor(deviceCategory) 
+                + as.factor(medium) + as.factor(is.USA) + as.factor(isTrueDirect) + as.factor(month) + 
+                trncount_sqr + pageviews_sqr + as.factor(peakhour),
                data = temp1, family = binomial(link = "logit"))
 
 summary(regcoef1)
