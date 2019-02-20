@@ -60,6 +60,16 @@ raw$time <- as.POSIXct(raw$visitStartTime,origin = "1970-01-01")
 raw$timeCST <- with_tz(raw$time,"America/Chicago")
 raw$hour <- hour(raw$timeCST)
 raw$peakhour <- if_else(raw$hour > 7 & raw$hour < 21, 1, 0)
+raw$USA <- ifelse(raw$country == "United States",1,0)
+
+#creating day week quarter and year variables
+
+raw <- raw %>% mutate(day = weekdays(ymd(date)), year = year(ymd(date)),month = months(ymd(date)))
+
+#adding square terms for pageview and trncount
+
+raw <- raw %>% mutate(trncount_sqr = (trncount)^2, pageviews_sqr = (pageviews)^2, is.weekend = ifelse(day %in% c("Saturday","Sunday"),1,0))
+
 
 #writing to csv
 
