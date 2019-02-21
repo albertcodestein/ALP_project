@@ -25,7 +25,7 @@ raw <- raw %>% mutate_at(vars(hits:transactionRevenue, visitNumber, fullVisitorI
 
 raw <- raw %>% mutate_at(vars(bounces, newVisits), function(x) ifelse(is.na(x) == T,0,1))
 
-raw <- raw %>% mutate(transactionRevenue = ifelse(is.na(transactionRevenue) == T,0,transactionRevenue/(10^6)))
+raw <- raw %>% mutate(transactionRevenue = ifelse(is.na(transactionRevenue) == T,0,transactionRevenue))
 
 raw$logRevenue <- log(raw$transactionRevenue + 1)
 
