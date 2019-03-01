@@ -1,3 +1,5 @@
+rm(list = ls())
+
 library(ggplot2)
 library(tidyverse)
 library(pastecs)
@@ -27,8 +29,9 @@ test <- logistic[-train_ind, ]
 #Build the classifier
 
 class_reg <- glm(is.transaction ~ trncount  + trncount_sqr + pageviews + as.factor(newVisits) + isMobile + as.factor(medium) +
-                as.factor(USA) + as.factor(isTrueDirect)  + pageviews_sqr + peakhour + as.factor(month), 
-                data = train, family = binomial(link = "logit"))
+                as.factor(USA) + as.factor(isTrueDirect)  + pageviews_sqr + peakhour + as.factor(month) 
+                +is.weekend + visitNumber +visitNumber^2 + trncount*medium + pageviews*newVisits
+                ,data = train, family = binomial(link = "logit"))
 
 summary(class_reg)
 
@@ -76,5 +79,28 @@ quantile(compare1$prob, na.rm = T)
 #test.cond_rev_new <- test.pred_rev*test.class_reg_new
 #RMSE_test_new <- sqrt(mean((test.cond_rev_new - test$logRevenue)^2, na.rm = T)) 
 #RMSE_test_new
+
+q = c(0, 0.05, 0.1, 0.25, 0.5, 0.75, 0.9, 0.95,1)
+
+quantile(compare0$logrev, probs = q, na.rm = T)
+quantile(compare1$logrev, probs = q, na.rm = T)
+
+quantile(compare0$Pred_logrev, probs = q, na.rm = T)
+quantile(compare1$Pred_logrev, probs = q, na.rm = T)
+
+quantile(compare0$prob, probs = q, na.rm = T)
+quantile(compare1$prob, probs = q, na.rm = T)
+
+
+#Manipulate high probability low revenue situations
+rm(test_logcompare)
+test_logcompare <- cbind(test.cond_rev,test$logRevenue, test.class_reg,test$is.transaction)
+colnames(test_logcompare) <- names
+test_logcompare <- as.data.frame(logcompare)
+
+test_logcompare$Pred_logrev <- ifelse((test_logcompare$prob >= 0.1 & test_logcompare$Pred_logrev < 8.210396)
+                                      ,5.710396,test_logcompare$Pred_logrev) 
+RMSE_test_new <- sqrt(mean((test_logcompare$Pred_logrev - test_logcompare$logrev)^2, na.rm = T)) 
+RMSE_test_new
 
 

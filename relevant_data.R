@@ -70,7 +70,6 @@ raw <- raw %>% mutate(day = weekdays(ymd(date)), year = year(ymd(date)),month = 
 
 raw <- raw %>% mutate(trncount_sqr = (trncount)^2, pageviews_sqr = (pageviews)^2, is.weekend = ifelse(day %in% c("Saturday","Sunday"),1,0))
 
-
 #writing to csv
 
 write.csv(raw, "relevant_data.csv")
