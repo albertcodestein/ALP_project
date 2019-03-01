@@ -1,39 +1,36 @@
 library(ggplot2)
 library(tidyverse)
-library(pastecs)
 library(lubridate)
-library(randomForest)
-library(ROCR)
-
 
 #dataset for logistic regression
 
 logistic <- read.csv("init_clean_training.csv")
 
-#modifying the variables
+#reformating the variables and log transformation log transaction revenue
 
-logistic <- logistic %>% mutate_at(vars(hits:transactionRevenue, visitNumber, fullVisitorId), function(x) as.numeric(x))
+logistic <- logistic %>% mutate_at(vars(hits:transactionRevenue, visitNumber, fullVisitorId), 
+                                   function(x) as.numeric(x)) #converting variables to numeric format
 
-logistic <- logistic %>% mutate_at(vars(bounces, newVisits), function(x) ifelse(is.na(x) == T,0,1))
+logistic <- logistic %>% mutate_at(vars(bounces, newVisits, isTrueDirect), 
+                                   function(x) ifelse(is.na(x) == T,0,1)) #creating dummy variables
 
-logistic <- logistic %>% mutate(transactionRevenue = ifelse(is.na(transactionRevenue) == T,0,transactionRevenue/(10^6)))
+logistic <- logistic %>% mutate(transactionRevenue = 
+                                        ifelse(is.na(transactionRevenue) == T,0,transactionRevenue)) #converting NAs to 0s
 
-logistic$logRevenue <- log(logistic$transactionRevenue + 1)
+logistic$logRevenue <- log(logistic$transactionRevenue + 1) #log transformation of transaction revenue
 
-logistic$isTrueDirect <- ifelse(is.na(logistic$isTrueDirect) == T,0,1)
-
-#transaction yes/no variable
+#dummy variable to indicate if a transaction has taken place
 
 logistic$is.transaction <- ifelse(logistic$transactionRevenue == 0,0,1)
 
-#transaction count
+######################################### creating variable for previous transaction count #############################
 
 temp <- logistic %>% select(c("fullVisitorId", "visitNumber", "is.transaction")) %>% 
         arrange(fullVisitorId, visitNumber)
 
 count <- 0
 for(index in 1:nrow(temp)){
-        temp$trncount[index] <- count
+        temp$prevtrncount[index] <- count
         if(index + 1 > nrow(temp)) break()
         
         if(temp$fullVisitorId[index] == temp$fullVisitorId[index+1] && temp$is.transaction[index] == 1) count <- count + 1
@@ -42,11 +39,9 @@ for(index in 1:nrow(temp)){
 
 #adding transacount to main dataset
 
-logistic <- logistic %>% arrange(fullVisitorId, visitNumber) %>% mutate(trncount = temp$trncount)
+logistic <- logistic %>% arrange(fullVisitorId, visitNumber) %>% mutate(prevtrncount = temp$prevtrncount)
 
-#distribution of visitore by continent
-
-logistic %>% group_by(continent) %>% summarise(length(visits))
+#----------------------------------------------------------------------------------------------------------------------------
 
 #distribution of paying customers by continent and country
 
@@ -62,70 +57,59 @@ logistic%>% group_by(medium) %>% summarise(length(pageviews))
 
 logistic$is.USA <- ifelse(logistic$country == "United States",1,0)
 
-#creating day week quarter and year variables
+#creating day week month and year variables
 
 logistic <- logistic %>% mutate(day = weekdays(ymd(date)), year = year(ymd(date)),month = months(ymd(date)))
 
-#adding square terms for pageview and trncount
+#adding holiday, weekend and square terms for pageview, trncount and visitnumber 
 
-logistic <- logistic %>% mutate(trncount_sqr = (trncount)^2, pageviews_sqr = (pageviews)^2, is.weekend = ifelse(day %in% c("Saturday","Sunday"),1,0))
+logistic <- logistic %>% mutate(prevtrncount_sqr = (prevtrncount)^2, pageviews_sqr = (pageviews)^2, is.weekend = ifelse(day %in% c("Saturday","Sunday"),1,0)
+                                , visitNumbersqr = visitNumber^2, is.holiday = ifelse(month == "December",1,0))
 
-#logistic regression model
+logistic <- logistic %>% filter(medium != "(not set)")
 
-temp <- logistic %>% filter(bounces == 0, medium != "(not set)", !is.na(pageviews) == T)
+#creating variable for peak hour
 
-regcoef <- glm(is.transaction ~ trncount + pageviews + as.factor(newVisits) + as.factor(deviceCategory) + as.factor(medium) +
-                       as.factor(is.USA) + as.factor(isTrueDirect) + as.factor(month) + trncount_sqr + pageviews_sqr 
-               data = temp, family = binomial(link = "logit"))
-
-summary(regcoef)
-
-pred.logit <- predict.glm(regcoef, newdata = temp, type = "response")
-
-table(temp$is.transaction, pred.logit > 0.035)
-
-
-#-----------------------------------------------------------------------------------------------------------------------------#
-#Adding peak  hour and month variables to the regression
 logistic$time <- as.POSIXct(logistic$visitStartTime,origin = "1970-01-01")
 logistic$timeCST <- with_tz(logistic$time,"America/Chicago")
 logistic$hour <- hour(logistic$timeCST)
 logistic$peakhour <- if_else(logistic$hour > 7 & logistic$hour < 21, 1, 0)
 table(logistic$peak)
 
+######################################## logistic regression model FOR usa ###############################################
 
+USA_data <- logistic %>% filter(bounces == 0, !is.na(pageviews) == T, is.USA == 1)
 
-logistic %>% group_by(month) %>% summarise(sum(is.transaction)) %>% arrange(desc(`sum(is.transaction)`))
+USA_reg <- glm(is.transaction ~ prevtrncount + prevtrncount_sqr + pageviews + pageviews_sqr + visitNumber + visitNumbersqr + as.factor(peakhour) +
+                                as.factor(newVisits) + as.factor(isMobile) + as.factor(medium) + as.factor(month) + as.factor(is.weekend) +
+                                as.factor(newVisits) * pageviews +
+                                as.factor(medium) * prevtrncount
+                       
+               ,data = USA_data, family = binomial(link = "logit"))
 
+summary(USA_reg)
 
+#prediction and confusion matric for USA data
 
-temp1 <- logistic %>% filter(bounces == 0, medium != "(not set)", !is.na(pageviews) == T)
-regcoef1 <- glm(is.transaction ~ trncount + pageviews + as.factor(newVisits) + as.factor(deviceCategory) 
-                + as.factor(medium) + as.factor(is.USA) + as.factor(isTrueDirect) + as.factor(month) + 
-                trncount_sqr + pageviews_sqr + as.factor(peakhour),
-               data = temp1, family = binomial(link = "logit"))
+pred.logit_USA <- predict.glm(USA_reg, USA_data, type = "response")
 
-summary(regcoef1)
+table(USA_data$is.transaction, pred.logit_USA > 0.5)
 
-pred.logit1 <- predict.glm(regcoef1, newdata = temp1, type = "response")
+########################################logistic regression for non-usa countries#############################################
 
-table(temp1$is.transaction, pred.logit1 > 0.035)
+non_USA_data <- logistic %>% filter(bounces == 0, !is.na(pageviews) == T, is.USA == 0)
 
-#adding month - p value is more than 0.05 but accuracy increases significantly. 
-logistic$peakmonth <- as.numeric((if_else(logistic$month %in% c("May", "August", "December"), 1, 0)))
+non_USA_reg <- glm(is.transaction ~ prevtrncount + prevtrncount_sqr + pageviews + pageviews_sqr +
+                       as.factor(newVisits) + as.factor(isMobile) +
+                       as.factor(isTrueDirect) +
+                       as.factor(newVisits) * pageviews
+               
+               ,data = non_USA_data, family = binomial(link = "logit"))
 
+summary(non_USA_reg)
 
-temp2 <- logistic %>% filter(bounces == 0, medium != "(not set)", !is.na(pageviews) == T)
-regcoef2 <- glm(is.transaction ~ trncount + pageviews + as.factor(newVisits) + as.factor(deviceCategory) + 
-                        as.factor(medium) +as.factor(is.USA) + as.factor(isTrueDirect) + 
-                        trncount_sqr + pageviews_sqr + as.factor(peakhour) + as.factor(peakmonth),
-                data = temp2, family = binomial(link = "logit"))
+#prediction and confusion matrix for non_USA data
 
-summary(regcoef2)
+pred.logit_non_USA <- predict.glm(non_USA_reg, non_USA_data, type = "response")
 
-pred.logit2 <- predict.glm(regcoef2, newdata = temp2, type = "response")
-
-table(temp2$is.transaction, pred.logit2 > 0.035)
-
-#-----------------------------------------------------------------------------------------------------------------------------#
-
+table(non_USA_data$is.transaction, pred.logit_non_USA > 0.5)
